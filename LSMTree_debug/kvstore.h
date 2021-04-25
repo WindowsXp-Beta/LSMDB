@@ -1,9 +1,10 @@
 #pragma once
 
 #include "kvstore_api.h"
-#include "MemTable.h"
+#include "memTable/MemTable.h"
 #include "cache.h"
 #include <list>
+#include <deque>
 #include <iostream>
 #include <fstream>
 #include "utils.h"
@@ -14,8 +15,8 @@ class KVStore : public KVStoreAPI {
 private:
     MemTable memTable;
 	uint64_t timeFlag;
-	std::list<cache*> cacheList;
-	
+	std::deque< std::list< cache* >* > cacheList;
+	std::string stoDir;
 public:
 	KVStore(const std::string &dir);
 

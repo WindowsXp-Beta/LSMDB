@@ -23,7 +23,7 @@ bool SkipList::put ( uint64_t k, const std::string &v ) { //跳转表词条插�
     if ( empty() ) {
         QuadList * new_quadlist = new QuadList;
         SkList.push_back(new_quadlist);
-    }; //插入首个Entry
+    } //插入首个Entry
 
     std::list<QuadList*>::iterator qlist = SkList.begin(); //从顶层四联表的
     QListNodePosi p = (*qlist) -> first(); //首节点出发
@@ -88,4 +88,8 @@ void SkipList::clear() {
         delete SkList.front();
         SkList.pop_front();
     }
+}
+
+Entry **SkipList::getWhole() {
+    return SkList.back() -> getWhole();
 }
