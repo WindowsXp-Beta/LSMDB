@@ -14,12 +14,11 @@ protected:
 public:
     bool empty() const { return SkList.empty(); }
     uint32_t size() const { return SkList.empty() ? 0 : SkList.back() -> size(); } //底层QuadList的规模
-    int level() { return SkList.size(); } //层高 == #QuadList，不一定要开放
-    uint64_t getMax() const { return SkList.empty() ? 0 : SkList.back() -> first() -> entry.key; }
-    uint64_t getMin() const { return SkList.empty() ? 0 : SkList.back() -> last() -> entry.key; }
-    bool put ( uint64_t k, const std::string &v ); //插入 若有重复值:返回假
+    uint64_t getMax() const { return SkList.empty() ? 0 : SkList.back() -> last() -> entry.key; }
+    uint64_t getMin() const { return SkList.empty() ? 0 : SkList.back() -> first() -> entry.key; }
+    void put ( uint64_t k, const std::string &v );
     std::string * get ( uint64_t k ); //读取
-    bool remove ( uint64_t k ); //删除
+    bool remove ( uint64_t k, uint32_t & ); //删除
     Entry ** getWhole();
     void clear();
 private:

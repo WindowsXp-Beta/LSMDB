@@ -12,4 +12,5 @@ add_executable(correctness correctness.cc)
 add_executable(persistence persistence.cc)
 add_executable(main main.cpp)
 
+target_link_libraries(correctness Cache KvStore QuadList SkipList MemTable)
 target_link_libraries(main Cache KvStore QuadList SkipList MemTable)

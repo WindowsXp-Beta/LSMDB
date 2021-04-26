@@ -18,7 +18,6 @@ public:
     bool isFull(uint64_t, uint32_t);
     void addEntry(uint64_t, const std::string&);
     std::string* search(uint64_t);//return NULL is not exist
-    void remove(uint64_t);
     Entry ** getWhole();
 
     bool * getBloom();

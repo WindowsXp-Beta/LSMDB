@@ -100,6 +100,7 @@ std::string KVStore::get(uint64_t key)
 {
     std::string *ret_str_p;
     if ((ret_str_p = memTable.search(key)) != nullptr) {//find in memTable
+        if (*ret_str_p == "~DELETE~") ret_str_p -> clear();
         return *ret_str_p;
     }
     else { //search in cache if find goto disk to get it
@@ -133,9 +134,11 @@ std::string KVStore::get(uint64_t key)
         std::string resultDir = fmt.str();
         std::ifstream inFile(resultDir, std::ios::in|std::ios::binary);
         inFile.seekg(offset, std::ios::beg);
-        char *ret_str_char = new char[length];
+        char *ret_str_char = new char[length + 1];
+        memset(ret_str_char, 0, length + 1);
         inFile.read(ret_str_char, length);
         std::string ret_str(ret_str_char);
+        if (ret_str == "~DELETE~") ret_str.clear();
         delete []ret_str_char;
         return ret_str;
     }
@@ -146,8 +149,12 @@ std::string KVStore::get(uint64_t key)
  */
 bool KVStore::del(uint64_t key)
 {
-//    if (memTable.remove(key)) return true;
-	return false;
+    std::string result = get(key);
+    if (!result.empty()) {
+        put(key, "~DELETE~");
+        return true;
+    }
+    else return false;
 }
 
 /**

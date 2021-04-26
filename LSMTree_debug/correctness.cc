@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 	std::cout << std::endl;
 	std::cout.flush();
 
-	CorrectnessTest test("./data", verbose);
+	CorrectnessTest test("./data", 1);
 
 	test.start_test();
 

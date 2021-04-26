@@ -12,12 +12,14 @@ int main() {
         KVStore m("../data");
         std::string s;
         int i = 0;
+        m.put(1, "abc");
         for (i = 1; i < 4; i++) {
             std::cin >> s;
             m.put(i, s);
         }
         std::cout << m.get(1) << '\t' << m.get(2) << '\t' <<m.get(3);
 
+        std::cout << m.del(1) << '\t' << m.get(1).empty() << std::endl;
 //        std::ifstream inFile("../data/level-0/0.sst", std::ios::in|std::ios::binary);
 //        char length[20];
 //        Header h;

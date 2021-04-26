@@ -119,8 +119,9 @@ Header: total: 32 bytes
 
 ### DEL
 
-1. 在`memtable`中查找记录，如果找到，删除。
-2. 无论是否找到，都要在`memtable`中插入一条新的记录，`(KEY, VALUE) == (KEY, "~DELETE~")`。
+1. 然后执行`GET`，即在memtable和sstable的cache中搜索
+2. 如果找到，返回值为真。
+3. 直接调`PUT`插一条`(key,"~DELETE~")` 因为有可能DELETE替换后就超过2M了，这时就要写sstable，即使memtable中存在key也无所谓，反正PUT会进行替换。
 
 ### RESET
 
@@ -152,4 +153,4 @@ Header: total: 32 bytes
 
    ![cj4DHO.md.jpg](https://z3.ax1x.com/2021/04/24/cj4DHO.md.jpg)
 
-   考虑我的cache的结构，level0中`cache1.Max < cache2.Max`，剩余层因区间不可相交，因此有`cachei.Min < cachei+1.Min && cachei.Max < cachei+1.Max`，因此在遍历一行的时候，只要记住这是第几个cache，然后sstable的命名采用`i.sst` `i`为其在一层中的序号。
+   考虑我的cache的结构，level0中`cache1.Max < cache2.Max如果两个max相等，比较min，如果min也相等，emmm暂时还没想好，剩余层因区间不可相交，因此有`cachei.Min < cachei+1.Min && cachei.Max < cachei+1.Max`，因此在遍历一行的时候，只要记住这是第几个cache，然后sstable的命名采用`i.sst` `i`为其在一层中的序号。

@@ -18,7 +18,7 @@ bool SkipList::skipSearch ( std::list<QuadList*>::iterator &qlist, //从指定�
     }  //课后：通过实验统计，验证关于平均查找长度的结论
 }
 
-bool SkipList::put ( uint64_t k, const std::string &v ) { //跳转表词条插入算法
+void SkipList::put ( uint64_t k, const std::string &v ) { //跳转表词条插入算法
     Entry e = Entry( k, v ); //待插入的词条（将被随机地插入多个副本）
     if ( empty() ) {
         QuadList * new_quadlist = new QuadList;
@@ -33,27 +33,28 @@ bool SkipList::put ( uint64_t k, const std::string &v ) { //跳转表词条插�
         do {
             p -> entry.value = v;
         } while ( p = p -> below );
-        return false;
     }
-    qlist = SkList.end(); qlist--; //以下，将从p的右侧，产生一座新塔
+    else {
+        qlist = SkList.end();
+        qlist--; //以下，将从p的右侧，产生一座新塔
 
-    QListNodePosi b = (*qlist) -> insertAfterAbove ( e, p ); //新节点b即新塔基座
-    while ( rand() & 1 ) { //经投掷硬币，若确定新塔需要再长高一层，则
-        while ( (*qlist) -> valid(p) && !p -> above ) p = p->pred; //找出不低于此高度的最近前驱
-        if ( !(*qlist) -> valid ( p ) ) { //若该前驱是header
-            if ( qlist == SkList.begin() ) //且当前已是最顶层，则意味着必须
-            {
-                QuadList* new_quadlist = new QuadList;
-                SkList.push_front(new_quadlist); //首先创建新的一层，然后
+        QListNodePosi b = (*qlist)->insertAfterAbove(e, p); //新节点b即新塔基座
+        while (rand() & 1) { //经投掷硬币，若确定新塔需要再长高一层，则
+            while ((*qlist)->valid(p) && !p->above) p = p->pred; //找出不低于此高度的最近前驱
+            if (!(*qlist)->valid(p)) { //若该前驱是header
+                if (qlist == SkList.begin()) //且当前已是最顶层，则意味着必须
+                {
+                    QuadList *new_quadlist = new QuadList;
+                    SkList.push_front(new_quadlist); //首先创建新的一层，然后
+                }
+                p = (*(--qlist))->first()->pred; //将p转至上一层Skiplist的header，因为各header之间是不连接的
+            } else {//否则，可径自
+                p = p->above; //将p提升至该高度
+                qlist--;
             }
-            p = (*(--qlist)) -> first() -> pred; //将p转至上一层Skiplist的header，因为各header之间是不连接的
-        } else {//否则，可径自
-            p = p->above; //将p提升至该高度
-            qlist--;
+            b = (*qlist)->insertAfterAbove(e, p, b); //将新节点插入p之后、b之上
         }
-        b = (*qlist) -> insertAfterAbove ( e, p, b ); //将新节点插入p之后、b之上
     }
-    return true;
 }
 
 std::string * SkipList::get(uint64_t k) {
@@ -64,11 +65,12 @@ std::string * SkipList::get(uint64_t k) {
     else return nullptr;
 }
 
-bool SkipList::remove(uint64_t k) {
+bool SkipList::remove(uint64_t k, uint32_t &length) {
     if ( SkList.empty() ) return false;//根据cppreference，当链表为空时，引用begin，end之类的东西是不行的
     std::list<QuadList*>::iterator qlist = SkList.begin();//从顶层
     QListNodePosi p = (*qlist) -> first();//的首节点
     if (skipSearch(qlist, p, k)) {//找到该节点，删除这一整座塔
+        length = p -> entry.value.length();
         do {
             QListNodePosi next_p = p -> below;
             (*qlist) -> remove(p);
@@ -80,6 +82,8 @@ bool SkipList::remove(uint64_t k) {
         }
         return true;
     }
+    /* if not find */
+    length = 0;
     return false;
 }
 

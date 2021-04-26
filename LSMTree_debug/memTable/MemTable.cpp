@@ -5,13 +5,13 @@
 #include "MemTable.h"
 #include "../MurmurHash3.h"
 
-#define DebugCap 20
+#define DebugCap 25
 
 MemTable::MemTable() {
     bloomFilter = new bool[10240];
     memset(bloomFilter, 0, 10240);
-    capacity = DebugCap;
-    //capacity = 2086868;
+//    capacity = DebugCap;
+    capacity = 2086868;
     //initial capacity:2MB - 32 - 10240 - 12
     //the last 12 is the useless Index just for calculating the length of last string
 }
@@ -23,7 +23,7 @@ MemTable::~MemTable() {
 bool MemTable::isFull(uint64_t key, uint32_t length) {
     std::string *s;
     if ((s = skList.get(key)) == nullptr) {
-        if ((int)(capacity - length) <= 0) return true;
+        if ((int)(capacity - length - 12) <= 0) return true;
         else return false;
     }
     else {
@@ -33,29 +33,24 @@ bool MemTable::isFull(uint64_t key, uint32_t length) {
 }
 
 void MemTable::addEntry(uint64_t key, const std::string &value) {
-    if (skList.put(key, value)) {
+    std::string *s;
+    if ((s = skList.get(key)) != nullptr) {
+        capacity = capacity + s -> length() - value.length();
+    }
+    else {
         uint32_t hash[4];
         MurmurHash3_x64_128(&key, sizeof(key), 1, hash);
         for (int i = 0; i < 4; i++) {
             bloomFilter[hash[i]%10240] = true;
         }
+        capacity -= 12 + value.length();
     }
-    capacity -= 12 + value.length();
+    skList.put(key, value);
 }
 
 std::string * MemTable::search(uint64_t key) {
     std::string * result = skList.get(key);
-    if (result) {
-        if ((*result) == "~DELETE~") return nullptr;
-        else return result;
-    }
-    return nullptr;
-}
-
-void MemTable::remove(uint64_t key) {
-    if (skList.remove(key)) {
-        skList.put(key, "~DELETE~");
-    }
+    return result;
 }
 
 Entry ** MemTable::getWhole() {
@@ -82,6 +77,6 @@ void MemTable::reset() {
     skList.clear();
     bloomFilter = new bool[10240];
     memset(bloomFilter, 0, 10240);
-    capacity = DebugCap;
-    //capacity = 2086868;
+//    capacity = DebugCap;
+    capacity = 2086868;
 }
