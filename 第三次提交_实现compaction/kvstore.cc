@@ -5,12 +5,16 @@
 #include "utils.h"
 
 
-SSTable *KVStore::readSST(uint32_t level, cache* sstCache) {
+SSTable *KVStore::readSST(uint32_t level, uint32_t index) {
     std::stringstream fmt;
-    int fileName = sstCache -> getFileName();
-    fmt << stoDir << "/level-" << level << "/" << fileName << ".sst";
+    fmt << stoDir << "/level-" << level << "/" << index << ".sst";
     std::string resultDir = fmt.str();
     std::ifstream inFile(resultDir, std::ios::in|std::ios::binary);
+    auto iterator = cacheList[level] -> begin();
+    while(index--) {
+        iterator++;
+    }
+    cache* sstCache = *iterator;
     uint64_t size = sstCache -> getSize();
     uint32_t valueSize = (sstCache -> getOffset())[size] - (sstCache -> getOffset())[0];
     char * newValueArray = new char [valueSize];
@@ -19,9 +23,9 @@ SSTable *KVStore::readSST(uint32_t level, cache* sstCache) {
     return newSStable;
 }
 
-void KVStore::writeSST(uint32_t level, int fileName, SSTable* ssTable) {
+void KVStore::writeSST(uint32_t level, uint32_t index, SSTable* ssTable) {
     std::stringstream fmt;
-    fmt << stoDir << "/level-" << level << "/" << fileName << ".sst";
+    fmt << stoDir << "/level-" << level << "/" << index << ".sst";
     std::string writeLevel = fmt.str();
     std::ofstream outFile(writeLevel, std::ios::out|std::ios::binary); //ios::out会清除文件中原来的内容
     cache* sstCache = ssTable -> getCache();
@@ -60,6 +64,7 @@ KVStore::~KVStore()
 void KVStore::put(uint64_t key, const std::string &s)
 {
     if (!memTable.addEntry(key, s)) {
+        int iterator;
         /* Header */
         uint64_t max = memTable.getMax();
         uint64_t min = memTable.getMin();
@@ -75,7 +80,6 @@ void KVStore::put(uint64_t key, const std::string &s)
         uint32_t offset = 32 + 10240 + 12 * (size + 1);//initial offset
         Entry* *memTableContent = memTable.getWhole();
 
-        int iterator;
         for (iterator = 0; iterator < size; iterator++) {
             newKeyArray[iterator] = memTableContent[iterator] -> key;
             newOffsetArray[iterator] = offset;
@@ -89,46 +93,48 @@ void KVStore::put(uint64_t key, const std::string &s)
         char* newValueArray = new char[valueSize];
         uint32_t cpyStart = 0;
         const char* value;
-        for (int i = 0; i < size; i++) {
-            value = memTableContent[i] -> value.data();
+        for (iterator = 0; iterator < size; iterator++) {
+            value = memTableContent[iterator] -> value.data();
             memcpy(newValueArray + cpyStart, value, strlen(value));
             cpyStart += strlen(value);
         }
         auto* newSSTable = new SSTable(newCache, newValueArray);
-
+        
         delete []memTableContent;
         /* begin write sstable */
         if(cacheList[0] -> size() < 2) {//dont need compaction
-            //新的cache直接插到尾部，fileName为cacheList[0]的size
-            newCache -> setFileName(cacheList[0] -> size());
-            writeSST(0, newCache -> getFileName(), newSSTable);
-            cacheList[0] -> push_back(newCache);
+            uint32_t index = 0;
+            auto p = cacheList[0] -> begin();
+            for(;p != cacheList[0] -> end();p++, index++) {
+                if ((*p) -> getMax() > max) break;
+            }
+            writeSST(0, index, newSSTable);
+            cacheList[0] -> insert(p, newCache);
             delete newSSTable;
         }
         else {//need compaction
             int nextLine = 1;
             uint64_t largestTime = timeFlag;
-
+            
             /* 初始时，sstList只有第0行的两个sst和将要写入第0行而导致溢出的那个sst */
             std::vector<SSTable*> sstList;
-            for (auto& p: (*cacheList[0])){
-                sstList.push_back(readSST(0, p));
-            }
+            sstList.push_back(readSST(0,0));
+            sstList.push_back(readSST(0,1));
             sstList.push_back(newSSTable);
-
             while(true) {
                 uint64_t minimum = -1, maximum = 0;
-                std::vector<std::list<cache*>::iterator> overlapList;
+                int minIndex = -1, maxIndex = -1;
                 for(auto & p : sstList) {
-                    minimum = p -> getMin() < minimum ? p -> getMin() : minimum; 
+                    minimum = p -> getMin() > minimum ? minimum : p -> getMin();
                     maximum = p -> getMax() > maximum ? p -> getMax() : maximum;
                 }
                 if(nextLine < cacheList.size()) {//nextLine exist
                     for(auto it = (cacheList[nextLine] -> begin()); it != (cacheList[nextLine] -> end()); it++) {
-                        if(!((*it) -> getMax() < minimum || (*it) -> getMin() > maximum)) overlapList.push_back(it);
+                        if(minimum > ((*it) -> getMax())) minIndex++;
+                        if(maximum > ((*it) -> getMin())) maxIndex++;
                     }
-                    for (auto &p: overlapList) {
-                        sstList.push_back(readSST(nextLine, (*p)));
+                    for (iterator = minIndex + 1; iterator <= maxIndex; iterator++) {
+                        sstList.push_back(readSST(nextLine, iterator));
                     }
                 }
 
@@ -138,12 +144,12 @@ void KVStore::put(uint64_t key, const std::string &s)
                 int *pointer = new int[sstList.size()]();//pointer数组保存每个sstable遍历到第几个元素
                 while(true) {
                     uint64_t smallest = -1, maxTimeFlag = 0;
-                    std::list<int> ownerList;//记录当前相同最小key的所有SSTable
-                    int owner = -1;//记录当前最小key的所有SSTable中的时间戳最大的
+                    std::list<int> ownerList;
+                    int owner = -1;
                     for(int i = 0; i < sstList.size(); i++) {
                         if(pointer[i] < 0) continue;//pointer[i]等于-1意味着其已经遍历完成
                         uint64_t smallTmp = sstList[i] -> getKey(pointer[i]);
-                        if(smallTmp < smallest) {
+                        if(smallest > smallTmp) {
                             ownerList.clear();
                             ownerList.push_back(i);
                             owner = i;
@@ -158,7 +164,7 @@ void KVStore::put(uint64_t key, const std::string &s)
                             ownerList.push_back(i);
                         }
                     }
-                    if(owner < 0) break;//归并完成
+                    if(owner < 0) break;
                     entryList.emplace_back(smallest, sstList[owner] -> getValue(pointer[owner]));
                     for(auto & p:ownerList) {
                         pointer[p]++;
@@ -167,7 +173,6 @@ void KVStore::put(uint64_t key, const std::string &s)
                         }
                     }
                 }
-                delete []pointer;
                 /* 释放SSTable */
                 while(!sstList.empty()) {
                     delete sstList.back();
@@ -175,21 +180,21 @@ void KVStore::put(uint64_t key, const std::string &s)
                 }
 
                 /* rebuild SSTable */
-                for(int i = 0; i < entryList.size();) {
+                for(int p = 0; p < entryList.size();) {
                     newCache = new cache();
                     size = 0;
-                    min = i;//i为entryList中的下标，min用来找到最小key
-                    while(newCache -> addEntry(entryList[i].key, entryList[i].value) && i < entryList.size()) {
-                        i++;
+                    min = p;//p为entryList中的下标
+                    while(newCache -> addEntry(entryList[p].key, entryList[p].value) && p < entryList.size()) {
+                        p++;
                         size++;
                     }
-                    max = i - 1;//因为i没有加到这个cache里，下一个cache的min就从i开始
+                    max = p - 1;
                     newCache -> setHead(Header(largestTime, size, entryList[max].key, entryList[min].key));
                     
                     newKeyArray = new uint64_t[size + 1];
                     newOffsetArray = new uint32_t[size + 1];
                     offset = 32 + 10240 + 12 * (size + 1);//initial offset
-                    for (iterator = 0; iterator < size; iterator++){
+                    for(iterator = 0; iterator < size; iterator++){
                         newKeyArray[iterator] = entryList[min + iterator].key;
                         newOffsetArray[iterator] = offset;
                         offset += entryList[iterator + min].value.length();
@@ -209,26 +214,26 @@ void KVStore::put(uint64_t key, const std::string &s)
                     newSSTable = new SSTable(newCache, newValueArray);
                     sstList.push_back(newSSTable);
                 }
+                delete []pointer;
 
                 /* write SSTable and update cache */
-                /* 如果下一层空，直接顺序写入 */
-                if(nextLine >= cacheList.size()) {
+                int overlap = maxIndex - minIndex;
+
+                if(nextLine >= cacheList.size()) {//如果下一层空，直接顺序写入
                     auto* newCacheList = new std::list<cache*>;
                     cacheList.push_back(newCacheList);
-                    for(int i = 0; i < sstList.size(); i++) {
-                        cache* writeCache = sstList[i] -> getCache();
-                        writeCache -> setFileName(i);
-                        newCacheList -> push_back(writeCache);
-                        writeSST(nextLine, i, sstList[i]);
+                    for(iterator = 0; iterator < sstList.size(); iterator++) {
+                        newCacheList -> push_back(sstList[iterator] -> getCache());
+                        writeSST(nextLine, iterator, sstList[iterator]);
                     }
                     while(!sstList.empty()) {
-                        delete sstList.back();//删除SSTable
+                        delete sstList.back() -> getValueArray();//删除char*
                         sstList.pop_back();
                     }
                     break;//finish compaction
                 }
                 /* 下一层能容纳 */
-                else if( (cacheList[nextLine] -> size() + sstList.size() - overlapList.size()) <= (2 << nextLine) ) {
+                else if( (cacheList[nextLine] -> size() + sstList.size() - overlap) <= (2 << nextLine) ) {
                     /* 先改文件名，从后往前改，一直改到maxIndex + 1 */
                     int incr = sstList.size() - overlap;
                     for(int i = (cacheList[nextLine] -> size() - 1); i > maxIndex; i--) {
@@ -241,52 +246,30 @@ void KVStore::put(uint64_t key, const std::string &s)
                         rename(oldName.data(), newName.data());
                     }
                     /* 替换重叠部分并更新cache */
-                    /* 先删除老的cache */
-                    auto comStart = cacheList[nextLine] -> begin();
-                    for(int i = 0; i < minIndex + 1; i++){
-                        comStart++;
-                    }
+                    int start = minIndex + 1;
+                    auto p = cacheList[nextLine] -> begin();
+                    while( start-- ) p++;
                     for(int i = minIndex + 1; i <= maxIndex; i++) {
-                        delete *comStart;
-                        cacheList[nextLine] -> erase(comStart);
-                        comStart++;
+                        cacheList[nextLine] -> erase(p);//其中包含的cache已经在释放SSTable时释放
+                        p++;
                     }
                     for(int i = 0; i < sstList.size(); i++) {
-                        cacheList[nextLine] -> insert(comStart, sstList[i] -> getCache());
-                        writeSST(nextLine, minIndex + 1 + i, sstList[i]);
+                        cacheList[nextLine] -> insert(p, sstList[i] -> getCache());
+                        writeSST(nextLine, start + i, sstList[i]);
                     }
                     /* 释放sstList中的char* */
                     while(!sstList.empty()) {
-                        delete sstList.back();//删除SSTable
+                        delete sstList.back() -> getValueArray();//删除char*
                         sstList.pop_back();
                     }
                     break;
                 }
                 /* 下一层容纳不下，即要多次归并 */
                 else {
-                    /* 下一层容量大于要写入的容量 */
-                    if(sstList.size() <= (2 << nextLine)) {
-                        /* 先找出要往下一层写的SSTable */
-                        int readIn = cacheList[nextLine] -> size() - overlap + sstList.size() - (2 << nextLine);//要写入的数量
-                        std::vector<std::list<cache*>::iterator> readArray(readIn);
-                        std::list<cache*>::iterator minKeyPointer;
-                        uint64_t minTimeStamp = -1;
-                        for(int i = 0; i < readIn; i++){
-                            auto p = cacheList[nextLine] -> begin();
-                            for(int j = 0; j < minIndex; j++) {
-                                if((*p) -> getTime() < minTimeStamp) {
-                                    minTimeStamp = (*p) -> getTime();
-                                    minKeyPointer = p;
-                                }
-                                p++;
-                            }
-                            for(int j = minIndex + 1; j <= maxIndex; j++) {
-                                p++;
-                            }
+                    //读入溢出的部分
 
-                        }
-                    }
                 }
+
             }
         }
         timeFlag++;
@@ -307,13 +290,14 @@ std::string KVStore::get(uint64_t key)
         else return *ret_str_p;
     }
     else { //search in cache if find goto disk to get it
-        int fileName = -1;
-        uint64_t bigTime = 0;
+        uint64_t bigTime = 0, index = 0;
         uint32_t offset = 0, length = 0;
         uint32_t level = 0;
+        int j = 0;//j records the index of cache in list
         for (int i = 0; i < cacheList.size(); i++) {
+            j = 0;
             auto p = cacheList[i] -> begin();
-            for(;p != cacheList[i] -> end(); p++) {//遍历一层
+            while (p != cacheList[i] -> end()) {//遍历一层
                 if ((*p) -> ifExist(key)) {//在cache中存在
                     uint64_t offsetTmp = (*p) -> binSearch(key, length);//二分搜索
                     if ( offsetTmp != 0) {//二分找到
@@ -322,17 +306,17 @@ std::string KVStore::get(uint64_t key)
                             offset = offsetTmp;
                             bigTime = timeTmp;
                             level = i;
-                            fileName = (*p) -> getFileName();
+                            index = j;
                         }
                     }
                 }
+                j++;
+                p++;
             }
         }
 
-        if(fileName == -1) return "";//if not find
-
         std::stringstream fmt;
-        fmt << stoDir << "/level-" << level << "/" << fileName << ".sst";
+        fmt << stoDir << "/level-" << level << "/" << index << ".sst";
         std::string resultDir = fmt.str();
         std::ifstream inFile(resultDir, std::ios::in|std::ios::binary);
         inFile.seekg(offset, std::ios::beg);

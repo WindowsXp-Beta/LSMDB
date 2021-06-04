@@ -23,12 +23,9 @@ public:
         bloomFilter = new bool[10240];
         keyArray = nullptr;
         offsetArray = nullptr;
-        fileName = -1;
     }
-    cache(Header headerTmp, bool* bloomTmp, uint64_t* KeyTmp, uint32_t* offTmp):headerPart(headerTmp),bloomFilter(bloomTmp),keyArray(KeyTmp), offsetArray(offTmp){
-        fileName = -1;
-    }
-    ~cache() { delete keyArray; delete offsetArray; delete bloomFilter;}
+    cache(Header headerTmp, bool* bloomTmp, uint64_t* KeyTmp, uint32_t* offTmp):headerPart(headerTmp),bloomFilter(bloomTmp),keyArray(KeyTmp), offsetArray(offTmp){}
+    ~cache(){ delete keyArray; delete offsetArray; delete bloomFilter;}
     void setHead(Header headTmp) { headerPart = headTmp;}
     Header getHead() {return headerPart;}
 
@@ -47,8 +44,7 @@ public:
     uint64_t getMax() const {return headerPart.max;}
     uint64_t getMin() const {return headerPart.min;}
     uint64_t getSize() const {return headerPart.size;}
-    void setFileName(int filename) { fileName = filename; }
-    int getFileName() { return fileName;}
+
     bool addEntry(uint64_t, const std::string&);
 private:
     /* Header */
@@ -60,7 +56,6 @@ private:
     /* offset array */
     uint32_t * offsetArray;
 
-    int fileName;
     int capacity;
 };
 

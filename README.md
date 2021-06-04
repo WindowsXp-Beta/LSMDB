@@ -17,6 +17,10 @@ A database implementation based on simplified LSM tree(Log-structured Merge Tree
 
 ### week14-16
 
+**阶段三：实现 Compaction 和其余逻辑。**
+
+**阶段四（即最终提交）：完成测试实验和报告（可能需根据测试要求更改部分代码）。**
+
 ## 题目解读
 
 **KEY, VALUE == unsigned long, std::string**
@@ -89,9 +93,9 @@ Header: total: 32 bytes
 
 ​	键最小值最大值(long 64bits 8bytes)
 
-布隆过滤器 （用来判断键是否存在） 10kb = 10240 Bytes
+布隆过滤器 （用来判断键是否存在）10kb = 10240 Bytes
 
-​	是一个bool（1 bytes）数组，则数组长度为10240。
+​	是一个bool（1 byte）数组，则数组长度为10240。
 
 索引区: (key, offset) -> (unsigned long, unsigned int) 12 bytes
 
@@ -137,7 +141,7 @@ Header: total: 32 bytes
 1. 在合并时，如果遇到相同键 K 的多条记录，通过比较时间戳来决定键 K 的最新值，时间戳大的记录被保留。
 2. 在执行合并操作时，根据时间戳将相同键的多个记录进行合并，通常不需要对“删除标记”进行特殊处理。因为删除标记的时间戳往往最新。若有新的覆盖，时间戳也可以解决问题。
 3. 合并完成后要更新内存中的缓存信息。
-4. 若产生的文件数超出 Level 1 层限定的数目，则从 Level 1的 SSTable中，优先选择时间戳最小的若干个文件（时间戳相等选择键最小的文件） ，使得文件数满足层数要求，以同样的方法继续向下一层合并（若没有下一层，则新建一层）。
+4. 若产生的文件数超出 Level 1 层限定的数目，则从 Level 1的 SSTable中，<del>优先选择时间戳最小的若干个文件（时间戳相等选择键最小的文件） ，使得文件数满足层数要求，</del> 这里要注意，是将时间戳大的值保留在这层，把时间戳小的值往下写。 以同样的方法继续向下一层合并（若没有下一层，则新建一层）。
 
 ### 一些实现的想法记录
 
@@ -153,4 +157,84 @@ Header: total: 32 bytes
 
    ![cj4DHO.md.jpg](https://z3.ax1x.com/2021/04/24/cj4DHO.md.jpg)
 
-   考虑我的cache的结构，level0中`cache1.Max < cache2.Max如果两个max相等，比较min，如果min也相等，emmm暂时还没想好，剩余层因区间不可相交，因此有`cachei.Min < cachei+1.Min && cachei.Max < cachei+1.Max`，因此在遍历一行的时候，只要记住这是第几个cache，然后sstable的命名采用`i.sst` `i`为其在一层中的序号。
+   考虑我的cache的结构，level0中`cache1.Max < cache2.Max`如果两个max相等，比较min，如果min也相等，emmm暂时还没想好（在大量数据存储时不常见），剩余层因区间不可相交，因此有`cachei.Min < cachei+1.Min && cachei.Max < cachei+1.Max`，因此在遍历一行的时候，只要记住这是第几个cache，然后sstable的命名采用`i.sst` `i`为其在一层中的序号。
+   
+3. 如何compaction
+
+   不同的compaction总具有下述形式，上一层若干连续的块，下一层若干连续的块（范围overlap的部分）。合并成为连续的`(key,value)`数组，然后再顺序扫描这个key value数组，将其转化为若干cache，并将其重新写入硬盘。
+
+   从disk中读出来，以`cache(header + bloom + keyArray + offSetArray) + value`的形式
+
+   以`cache(header + bloom + keyArray + offSetArray) + value`为单位操作，命名为SStable
+
+   ```c++
+   struct SSTable {
+     cache cachePart;
+     char* valuePart;
+   };
+   SSTable* readSSTable() {
+     read Header;
+     new bloomFilter[];
+     read bloomFilter;
+     new KeyArray[];
+     read KeyArray;
+     new offsetArray[];
+     read offsetArray;
+     new char value[];
+     read value;
+     new SSTable(Header, bloomFilter, KeyArray, offsetArray);
+     return SSTable;
+   }
+   void writeSSTable(SSTable sst){
+     write Header;
+     write bloomFilter;
+     write KeyArray;
+     write offsetArray;
+     write value;
+   }
+   vector<struct SSTable> compaction(vector<struct SSTable>);//value就是一个char数组
+   ```
+
+   0层写1层：读0层原来的两个，读一层重叠的若干个，compaction，0层compaction完，如果超出一层，将键小的写到一层。
+
+   1层写2层：读二层重叠的部分，compaction，如果超出三层，将键小的写到三层，读四层重叠的部分。
+
+   当不超出时，完成归并。
+
+
+合并逻辑：
+
+> 在cache中新增一条记录name，用来记录对应的SSTable的文件名。
+
+`std::vector<SSTable*> sstlist`存待写入下一行的所有SSTable。
+
+它的初始值是上一行溢出的，即时间戳较小的，键较小的。
+
+首先，遍历下一行（cache），在其中找（在cache中找）与其区间覆盖的，<del>读取cache的name存入一个vector中。</del>似乎用一个`std::vector<std::list<cache*>::iterator>`来存更合适。因为你之后还要删掉这些cache。
+
+然后遍历这个vector，读取每一个SSTable，插入sstlist，至此sstlist构造完毕。
+
+归并sstlist中的所有sstable，形成一个大的entry数组。并将sstlist删除。
+
+遍历这个entry数组，构造cache和value part。此时的cache是不知道name的。然后将其插入sstlist中。
+
+写入disk，分情况讨论：
+
+- 下一层空，构造新的`List<cache*>`，插入cache（存在sstlist中每一个SSTable的cache），cache中的name从0开始增大。把list插到cachelist中。
+
+- 下一层不空，但可以容纳所有SSTable，遍历存储重叠区域name的vector，sstlist中cache的name先取这些name，再从最大值`List<cache*>.size()`开始写。
+
+- 下一层容纳不下所有要写入的SSTable。又分两种情况
+
+  - 容量大于要写入的SSTable数量
+
+    遍历`[0, minIndex]`到`[maxIndex + 1, size]`找到时间戳大的，键小的，把name加入存储可替换name的vector。读入，加入sstlist的最后。
+
+    sstlist中cache的name先取vector中的name，再从`List<cache*>.size()`开始赋。
+
+    此时sstlist即为往下一行归并的sstable。
+
+  - 容量小于要写入的SSTable数量
+
+    直接读入所有的[0, minIndex]与[maxIndex + 1, size]，将sstlist顺序填入，填满下一行，name从0开始。
+

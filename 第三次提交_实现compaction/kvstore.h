@@ -16,12 +16,12 @@ class KVStore : public KVStoreAPI {
 private:
     MemTable memTable;
 	uint64_t timeFlag;
-	std::vector< std::list< cache* >* > cacheList;
+	std::deque< std::list< cache* >* > cacheList;
 	std::string stoDir;
 
 	/* private function */
-    SSTable* readSST(uint32_t level, cache*);
-	void writeSST(uint32_t level, int fileName, SSTable*);
+    SSTable* readSST(uint32_t level, uint32_t index);
+	void writeSST(uint32_t level, uint32_t index, SSTable*);
 public:
 	explicit KVStore(const std::string &dir);
 
