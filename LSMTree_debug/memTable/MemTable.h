@@ -25,7 +25,7 @@ public:
     uint64_t getMin();
     uint32_t getSize();
     void reset();
-
+    bool empty();
 };
 
 #endif //LSM_LAB_MEMTABLE_H

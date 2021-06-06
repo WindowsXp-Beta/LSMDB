@@ -6,18 +6,21 @@
 #include "../MurmurHash3.h"
 #include <cstring>
 
-#define DebugCap 15
+#define DEBUGx
+#define DebugCap 34
 
 MemTable::MemTable() {
     bloomFilter = new bool[10240]();
-//    capacity = DebugCap;
-    capacity = 2086868;
     //initial capacity:2MB - 32 - 10240 - 12
     //the last 12 is an useless Index just for calculating the length of last string
+    capacity = 2086868;
+#ifdef DEBUG
+    capacity = DebugCap;
+#endif
 }
 
 MemTable::~MemTable() {
-    delete bloomFilter;
+    /* Empty */
 }
 
 // bool MemTable::isFull(uint64_t key, uint32_t length) {
@@ -35,10 +38,10 @@ MemTable::~MemTable() {
 bool MemTable::addEntry(uint64_t key, const std::string &value) {
     std::string *s;
     if ((s = skList.get(key)) != nullptr) {
-        if((capacity = capacity + (int)(s -> length()) - (int)value.length()) <= 0) return false;
+        if((capacity = capacity + (int)(s -> length()) - (int)value.length()) < 0) return false;
     }
     else {
-        if((capacity = capacity - (int)value.length() - 12) <= 0) return false;
+        if((capacity = capacity - (int)value.length() - 12) < 0) return false;
         uint32_t hash[4];
         MurmurHash3_x64_128(&key, sizeof(key), 1, hash);
         for (unsigned int i : hash) {
@@ -76,8 +79,13 @@ uint32_t MemTable::getSize() {
 
 void MemTable::reset() {
     skList.clear();
-    bloomFilter = new bool[10240];
-    memset(bloomFilter, 0, 10240);
-//    capacity = DebugCap;
+    bloomFilter = new bool[10240]();
     capacity = 2086868;
+#ifdef DEBUG
+    capacity = DebugCap;
+#endif
+}
+
+bool MemTable::empty() {
+    return skList.empty();
 }

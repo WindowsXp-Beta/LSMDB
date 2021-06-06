@@ -18,10 +18,17 @@ private:
 	uint64_t timeFlag;
 	std::vector< std::list< cache* >* > cacheList;
 	std::string stoDir;
+	std::vector< std::vector<int> > slot;//slot用来记录每层的空位
 
 	/* private function */
-    SSTable* readSST(uint32_t level, cache*);
+	std::string getFilePath(uint32_t level, int fileName);
+	std::string getFolderPath(uint32_t level);
+	SSTable* readSST(uint32_t level, cache*);
 	void writeSST(uint32_t level, int fileName, SSTable*);
+	void deleteSST(uint32_t level, int fileName);
+	cache* readCache(std::string&);
+	SSTable* createSSTable();
+	void compactor(SSTable* newSSTable);
 public:
 	explicit KVStore(const std::string &dir);
 

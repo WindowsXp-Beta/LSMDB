@@ -14,11 +14,16 @@ public:
     uint64_t min;
     explicit Header(uint64_t timeTmp = 0, uint64_t sizeTmp = 0, uint64_t maxTmp = 0, uint64_t minTmp = 0):timeFlag(timeTmp), size(sizeTmp), max(maxTmp), min(minTmp){}
 };
+#define DEBUGx
+#define DebugCap 34
 
 class cache {
 public:
     cache(){
         capacity = 2086868;
+#ifdef DEBUG
+        capacity = DebugCap;
+#endif
         headerPart = Header();
         bloomFilter = new bool[10240];
         keyArray = nullptr;
