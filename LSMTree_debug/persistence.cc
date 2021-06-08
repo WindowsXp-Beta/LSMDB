@@ -18,6 +18,7 @@ private:
 		// Test multiple key-value pairs
 		for (i = 0; i < max; ++i) {
 			store.put(i, std::string(i+1, 's'));
+			std::cout << i << std::endl;
 			EXPECT(std::string(i+1, 's'), store.get(i));
 		}
 		phase();
@@ -178,8 +179,8 @@ int main(int argc, char *argv[])
 	usage(argv[0], verbose ? "ON" : "OFF",
 	      testmode ? "Test Mode" : "Preparation Mode");
 
-	PersistenceTest test("./data", verbose);
-
+//	PersistenceTest test("../../../../../../../../Volumes/其它/data", verbose);
+    PersistenceTest test("./data", verbose);
 	test.start_test(static_cast<void *>(&testmode));
 
 	return 0;

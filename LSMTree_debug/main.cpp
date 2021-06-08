@@ -7,22 +7,26 @@
 #include "utils.h"
 #include <iostream>
 #include <fstream>
+#include <vector>
+#include <cstdlib>
+using namespace std;
 
 int main() {
-        KVStore m("../data");
-        std::string s;
-        int i = 0;
-//        m.put(1, "abc");
-//        for (i = 1; i < 4; i++) {
-//            std::cin >> s;
-//            m.put(i, s);
-//        }
-//        std::cout << m.get(1) << '\t' << m.get(2) << '\t' <<m.get(3) << std::endl;
-//
-//        std::cout << m.del(1) << '\t' << m.get(1).empty() << std::endl;
-        SSTable* newSST = m.readSST(0,0);
-        std::cout << "size is" <<newSST -> getCache() ->getHead().size << "min is " << newSST -> getCache() ->getHead().min << "max is " << newSST -> getCache() ->getHead().max << "timeflag is " << newSST -> getCache() ->getHead().timeFlag << std::endl;
-
+//    KVStore m("../../../../../../../../Volumes/其它/data");
+    KVStore m("../data");
+    std::string s;
+//    int n;
+//    std::cout << "input test 次数" << std::endl;
+//    std::cin >> n;
+//    int i = 0;
+//    int key = 0;
+//    for (i = 0; i < n; i++) {
+//        std::cin >> key;
+//        std::cin >> s;
+//        m.put(key, s);
+//    }
+    std::cout << m.get(4) << std::endl << m.get(10) << std::endl <<m.get(2) << std::endl;
+//    m.reset();
 //        std::ifstream inFile("../data/level-0/0.sst", std::ios::in|std::ios::binary);
 //        char length[20];
 //        Header h;
@@ -40,20 +44,20 @@ int main() {
 //        inFile.seekg(10296,std::ios::beg);
 //        inFile.read((char *)length, 20);
 //        std::cout << inFile.gcount() << std::endl << length;
-
-//    std::string s = "../data", s1 = "../data/level-0";
-//    std::vector<std::string> ret;
-//    std::cout << utils::dirExists(s) << std::endl;
-//    if (utils::mkdir(s1.data())) std::cout << "Create failed\n";
-//    std::cout << utils::dirExists(s1) << std::endl;
-//    std::ofstream outFile("../data/level-0/test.txt", std::ios::out);
-//    outFile<<s;
-//    outFile.close();
-//    outFile.open("../data/level-0/test1.txt", std::ios::out);
-//    outFile<<s1;
-//    outFile.close();
-//    std::cout << utils::scanDir(s1, ret) << std::endl;
-//    for(int i = 0; i < ret.size(); i++) {
-//        std::cout<<ret[i]<<'\t';
+//    vector<string> folderList;
+//    utils::scanDir("../data", folderList);
+//    for(int i = 0; i < folderList.size(); i++) {
+//        int levelName = atoi(folderList[i].data() + 6);
+//        cout << levelName << endl;
+//        cout << folderList[i] << endl;
 //    }
+//    cout << endl;
+//    folderList.clear();
+//    utils::scanDir("../../../../../../../../Volumes/其它/data", folderList);
+//    for(int i = 0; i < folderList.size(); i++) {
+//        int levelName = atoi(folderList[i].data() + 6);
+//        cout << levelName << endl;
+//        cout << folderList[i] << endl;
+//    }
+//    cout << endl;
 }

@@ -23,18 +23,6 @@ MemTable::~MemTable() {
     /* Empty */
 }
 
-// bool MemTable::isFull(uint64_t key, uint32_t length) {
-//     std::string *s;
-//     if ((s = skList.get(key)) == nullptr) {
-//         if (capacity - (int)length - 12) <= 0) return true;
-//         else return false;
-//     }
-//     else {
-//         if((int)(capacity - length + s -> length()) <= 0) return true;
-//         else return false;
-//     }
-// }
-
 bool MemTable::addEntry(uint64_t key, const std::string &value) {
     std::string *s;
     if ((s = skList.get(key)) != nullptr) {

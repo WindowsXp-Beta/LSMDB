@@ -2,8 +2,11 @@
 #include <string>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
 #include "MurmurHash3.h"
 #include "utils.h"
+#define PARTcachex
+#define NOcachex
 
 std::string KVStore::getFilePath(uint32_t level, int fileName) {
     std::stringstream fmt;
@@ -73,7 +76,7 @@ void KVStore::writeSST(uint32_t level, int fileName, SSTable* ssTable) {
     std::string writeLevel = getFilePath(level, fileName);
     std::ofstream outFile(writeLevel, std::ios::out|std::ios::binary); //ios::out会清除文件中原来的内容
     if(outFile.fail()) {
-        std::cout << "Fail open file on level " << level << "and File name is " << fileName;
+        std::cout << "Fail open file on level " << level << " and File name is " << fileName;
         std::cout.flush();
     }
     cache* sstCache = ssTable -> getCache();
@@ -175,7 +178,7 @@ void KVStore::compactor(SSTable* newSSTable) {
                 sstList.push_back(readSST(nextLine, (*p)));
             }
         }
-        if(!overlapList.empty()) std::cout << "compaction" << std::endl;
+//        if(!overlapList.empty()) std::cout << "compaction" << std::endl;
         else if(nextLine == 1) {//下一行不存在且1是下一行也要开启flag
             flag = true;
         }
@@ -408,6 +411,11 @@ void KVStore::compactor(SSTable* newSSTable) {
         cacheList[0] -> pop_back();
     }
 }
+bool cmp(std::string &a, std::string &b) {
+    int levelA = atoi(a.data() + 6);
+    int levelB = atoi(b.data() + 6);
+    return levelA < levelB;
+}
 
 KVStore::KVStore(const std::string &dir): KVStoreAPI(dir)
 {
@@ -416,39 +424,46 @@ KVStore::KVStore(const std::string &dir): KVStoreAPI(dir)
     /* 从已有sstable中构造初始的cache */
     std::vector<std::string> folderList;
     int folderNum = utils::scanDir(stoDir, folderList);
-    /* 返回的folder是倒着的 level-n level-(n-1) ... level-0 */
-    for(int i = 0; i < folderNum; i++) {
-        auto *newCacheList = new std::list< cache* >;
-        cacheList.push_back(newCacheList);
-        std::string folder = stoDir + "/" + folderList[i];
-        std::vector<std::string> fileList;
-        int fileNum = utils::scanDir(folder, fileList);
-        bool *slotFlag = new bool[2 << i]();
-        int maxFileName = -1;
-        for(int j = 0; j < fileNum; j++) {
-            std::string fileName = folder + "/" + fileList[j];
-            cache* newCache = readCache(fileName);
-            int filename = atoi(fileList[j].data());
-            slotFlag[filename] = true;
-            maxFileName = filename > maxFileName ? filename : maxFileName;
-            timeFlag = newCache -> getTime() > timeFlag ? newCache -> getTime() : timeFlag;
-            newCache -> setFileName(filename);
-            newCacheList -> push_back(newCache);
-        }
-        /* 构造slot */
-        slot.emplace_back(std::vector<int>());
-        for(int j = 0; j <= maxFileName; j++) {
-            if(!slotFlag[j]) slot[i].push_back(j);
-        }
-        delete []slotFlag;
-    }
-    timeFlag++;
     if(folderNum == 0) {//如果没有folder则要构造第0行
+        timeFlag = 1;
         std::string level0 = stoDir + "/level-0";
         utils::mkdir(level0.data());
         auto *listZero = new std::list< cache* >;//level0's cache
         cacheList.push_back(listZero);
         slot.emplace_back(std::vector<int>());
+    }
+    /* <del>返回的folder是倒着的 level-n level-(n-1) ... level-0</del> */
+    /* <del>本机固态上返回的是倒序的，移动硬盘上返回的是顺序的</del> */
+    /* <del>所以我检测第一个文件，看是否是0，判断是正序还是倒序</del> */
+    /* 甚至是乱序的，因此我先sort再读入 */
+    else {
+        std::sort(folderList.begin(), folderList.end(), cmp);
+        for (int i = 0; i < folderNum; i++) {
+            auto *newCacheList = new std::list<cache *>;
+            cacheList.push_back(newCacheList);//如果是顺序，从后往前插
+            std::string folder = stoDir + "/" + folderList[i];
+            std::vector<std::string> fileList;
+            int fileNum = utils::scanDir(folder, fileList);
+            bool *slotFlag = new bool[2 << i]();
+            int maxFileName = -1;
+            for (int j = 0; j < fileNum; j++) {
+                std::string fileName = folder + "/" + fileList[j];
+                cache *newCache = readCache(fileName);
+                int filename = atoi(fileList[j].data());
+                slotFlag[filename] = true;
+                maxFileName = filename > maxFileName ? filename : maxFileName;
+                timeFlag = newCache->getTime() > timeFlag ? newCache->getTime() : timeFlag;
+                newCache->setFileName(filename);
+                newCacheList->push_back(newCache);
+            }
+            /* 构造slot */
+            slot.emplace_back(std::vector<int>());
+            for (int j = 0; j <= maxFileName; j++) {
+                if (!slotFlag[j]) slot[i].push_back(j);
+            }
+            delete[]slotFlag;
+        }
+        timeFlag++;
     }
 }
 
@@ -477,6 +492,7 @@ KVStore::~KVStore()
         delete cacheList.back();
         cacheList.pop_back();
     }
+    memTable.reset();
 }
 
 /**
@@ -571,6 +587,105 @@ std::string KVStore::get(uint64_t key)
     }
 }
 /**
+ * GET without cache
+ */
+#ifdef NOcache
+std::string KVStore::get(uint64_t key) {
+    std::string *ret_str_p;
+    if ((ret_str_p = memTable.search(key)) != nullptr) {//find in memTable
+        if (*ret_str_p == "~DELETE~") return "";
+        else return *ret_str_p;
+    }
+    else {
+        int fileName = -1;
+        uint64_t bigTime = 0;
+        uint32_t offset = 0, length = 0, finalLength = 0;
+        uint32_t level = 0;
+        for (int i = 0; i < cacheList.size(); i++) {
+            auto p = cacheList[i] -> begin();
+            for(;p != cacheList[i] -> end(); p++) {//遍历一层
+                std::string currentFileName = getFilePath(i, (*p) -> getFileName());
+                cache* thisCache = readCache(currentFileName);
+                if (thisCache -> ifExist(key)) {//在cache中存在
+                    uint64_t offsetTmp = thisCache -> binSearch(key, length);//二分搜索
+                    if ( offsetTmp != 0) {//二分找到
+                        uint64_t timeTmp = thisCache -> getTime();
+                        if (timeTmp > bigTime) {//如果时间戳更新
+                            offset = offsetTmp;
+                            bigTime = timeTmp;
+                            level = i;
+                            fileName = (*p) -> getFileName();
+                            finalLength = length;
+                        }
+                    }
+                }
+                delete thisCache;
+            }
+        }
+        if(fileName == -1) return "";//if not find
+
+        std::string resultDir = getFilePath(level, fileName);
+        std::ifstream inFile(resultDir, std::ios::in|std::ios::binary);
+        inFile.seekg(offset, std::ios::beg);
+        char *ret_str_char = new char[finalLength + 1]();
+        inFile.read(ret_str_char, finalLength);
+        std::string ret_str(ret_str_char);
+        if (ret_str == "~DELETE~") ret_str.clear();
+        delete []ret_str_char;
+        return ret_str;
+    }
+}
+#endif
+#ifdef PARTcache
+/*
+ * GET with part cache
+ */
+std::string KVStore::get(uint64_t key)
+{
+    std::string *ret_str_p;
+    if ((ret_str_p = memTable.search(key)) != nullptr) {//find in memTable
+        if (*ret_str_p == "~DELETE~") return "";
+        else return *ret_str_p;
+    }
+    else { //search in cache if find goto disk to get it
+        int fileName = -1;
+        uint64_t bigTime = 0;
+        uint32_t offset = 0, length = 0, finalLength = 0;
+        uint32_t level = 0;
+        for (int i = 0; i < cacheList.size(); i++) {
+            auto p = cacheList[i] -> begin();
+            for(;p != cacheList[i] -> end(); p++) {//遍历一层
+//                if ((*p) -> ifExist(key)) {//在cache中存在
+                    uint64_t offsetTmp = (*p) -> binSearch(key, length);//二分搜索
+                    if ( offsetTmp != 0) {//二分找到
+                        uint64_t timeTmp = (*p) -> getTime();
+                        if (timeTmp > bigTime) {//如果时间戳更新
+                            offset = offsetTmp;
+                            bigTime = timeTmp;
+                            level = i;
+                            fileName = (*p) -> getFileName();
+                            finalLength = length;
+                        }
+                    }
+//                }
+            }
+        }
+
+        if(fileName == -1) return "";//if not find
+
+        std::string resultDir = getFilePath(level, fileName);
+        std::ifstream inFile(resultDir, std::ios::in|std::ios::binary);
+        inFile.seekg(offset, std::ios::beg);
+        char *ret_str_char = new char[finalLength + 1]();
+        inFile.read(ret_str_char, finalLength);
+        std::string ret_str(ret_str_char);
+        if (ret_str == "~DELETE~") ret_str.clear();
+        delete []ret_str_char;
+        return ret_str;
+    }
+}
+#endif
+/**
  * Delete the given key-value pair if it exists.
  * Returns false iff the key is not found.
  */
@@ -613,6 +728,5 @@ void KVStore::reset(){
     while(!slot.empty()){
         slot.pop_back();
     }
-    timeFlag = 0;
+    timeFlag = 1;
 }
-

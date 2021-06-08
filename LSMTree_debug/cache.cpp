@@ -14,9 +14,9 @@ bool cache::ifExist(uint64_t key) {
 
 uint64_t cache::binSearch(uint64_t key, uint32_t &length) {
     uint64_t size = headerPart.size;
-    uint64_t right = 0, left = size - 1;
+    long right = 0, left = size - 1;
     while (right <= left) {
-        uint64_t mid = (right + left)/2;
+        long mid = (right + left)/2;
         if (keyArray[mid] == key) {
             length = offsetArray[mid + 1] - offsetArray[mid];
             return offsetArray[mid];

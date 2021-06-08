@@ -237,4 +237,3 @@ Header: total: 32 bytes
   - 容量小于要写入的SSTable数量
 
     直接读入所有的[0, minIndex]与[maxIndex + 1, size]，将sstlist顺序填入，填满下一行，name从0开始。
-

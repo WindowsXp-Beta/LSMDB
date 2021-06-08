@@ -16,9 +16,9 @@ class KVStore : public KVStoreAPI {
 private:
     MemTable memTable;
 	uint64_t timeFlag;
-	std::vector< std::list< cache* >* > cacheList;
+	std::deque< std::list< cache* >* > cacheList;
 	std::string stoDir;
-	std::vector< std::vector<int> > slot;//slot用来记录每层的空位
+	std::deque< std::vector<int> > slot;//slot用来记录每层的空位
 
 	/* private function */
 	std::string getFilePath(uint32_t level, int fileName);
@@ -33,6 +33,10 @@ public:
 	explicit KVStore(const std::string &dir);
 
 	~KVStore();
+
+	uint32_t getSize() {
+	    return memTable.getSize();
+	}
 
 	void put(uint64_t key, const std::string &s) override;
 
