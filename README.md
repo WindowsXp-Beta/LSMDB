@@ -1,15 +1,14 @@
 # LSMDB
 A database implementation based on simplified LSM tree(Log-structured Merge Tree)
 > Project of SE-2322 Advanced data structure
-> @SJTU-SE
 
-## Compile
+## Getting Started
 
-I suggest using CLion to compile.(That's what I do​ :smile:
+I use CMake to compile all the tests and main entry(`src/main.cpp`).
 
-I've provided two CMakeLists files. One in main directory and one in memTable directory.
+Three tests(compaction, correctness, persistence) are in the `tests` directory.
 
-> So You can also use CMake to compile it by yourself.
+The main entry is like a playground and you can create a LSMDB(aka. KVStore) object, specify the data path and play with it.
 
 ## Features
 
@@ -21,15 +20,11 @@ I've provided two CMakeLists files. One in main directory and one in memTable di
    void KVStore::put(uint64_t key, const std::string value);
    ```
 
-   
-
 2. GET
 
    ```c++
    std::string KVStore::get(uint64_t key);
    ```
-
-   
 
 3. DELETE
 
@@ -41,18 +36,18 @@ I've provided two CMakeLists files. One in main directory and one in memTable di
 
    After restart, it will first scan the `./data` directory to build SSTable from existing files.
 
-## performance
+## Performance
 
-Check [LSM_Tree lab report](./LSM Tree实验报告/LSM_Tree实验报告.pdf) to see the performance tests and results.
+Check [LSM_Tree实验报告](../docs/report/LSM_Tree实验报告.pdf) for a detailed and vivid report.
 
-## storage structure
+## Storage Structure
 
-### In memory
+### memory
 
 1. memtable.
 2. SSTable except the value part.
 
-### In disk
+### disk
 
 > Level n 层的文件数量上限为 $2^{n+1}$（即Level 0 是 2，Level 1 是 4，Level 2 是 8，……）
 >

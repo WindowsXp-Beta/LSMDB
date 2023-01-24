@@ -1,0 +1,4 @@
+add_executable(correctness_random correctness_random.cc)
+add_executable(persistence persistence.cc)
+add_executable(correctness correctness.cc)
+add_executable(compaction_test compaction_test.cpp)
