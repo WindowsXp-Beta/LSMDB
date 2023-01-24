@@ -38,7 +38,7 @@ The main entry is like a playground and you can create a LSMDB(aka. KVStore) obj
 
 ## Performance
 
-Check [LSM_Tree实验报告](../docs/report/LSM_Tree实验报告.pdf) for a detailed and vivid report.
+Check [LSM_Tree实验报告](../../tree/main/docs/report/LSM_Tree实验报告.pdf) for a detailed and vivid report.
 
 ## Storage Structure
 
